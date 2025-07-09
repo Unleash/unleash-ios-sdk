@@ -81,6 +81,7 @@ public class Poller {
         var components = URLComponents(url: unleashUrl, resolvingAgainstBaseURL: false)
         components?.percentEncodedQuery = context
             .toURIMap()
+            .sorted(by: { $0.key < $1.key })
             .compactMap { key, value in
             if let encodedKey = key.addingPercentEncoding(withAllowedCharacters: .rfc3986Unreserved),
                let encodedValue = value.addingPercentEncoding(withAllowedCharacters: .rfc3986Unreserved) {

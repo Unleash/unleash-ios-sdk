@@ -235,6 +235,29 @@ final class PollerTests: XCTestCase {
         poller.getFeatures(context: Context())
         wait(for: [expectation], timeout: timeout)
     }
+    
+    func testQueryParametersShouldBeSorted() {
+        let data = stubData()
+        let session = MockPollerSession(data: data, response: mockResponse())
+        let poller = Poller(refreshInterval: nil, unleashUrl: unleashUrl, apiKey: apiKey, session: session, appName: appName, connectionId: connectionId)
+        
+        let expectation = XCTestExpectation(description: "Expect query parameters to be sorted.")
+        session.performRequestHandler = { request in
+            XCTAssertEqual(request.url?.absoluteString, "https://app.unleash-hosted.com/hosted/api/proxy?appName=APPNAME&environment=ENV&properties%5Bfoo%5D=bar&sessionId=SESSIONID&userId=USERID")
+            expectation.fulfill()
+        }
+        
+        let context = Context(
+            appName: "APPNAME",
+            environment: "ENV",
+            userId: "USERID",
+            sessionId: "SESSIONID",
+            properties: ["foo": "bar"]
+        )
+        poller.getFeatures(context: context)
+        
+        wait(for: [expectation])
+    }
 
     func testGivenBoostrappingTogglesWhenStartThenSetToggles() {
         let stubToggles = [
