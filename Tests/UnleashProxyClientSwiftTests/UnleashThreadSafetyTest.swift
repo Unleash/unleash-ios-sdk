@@ -1,7 +1,7 @@
 import XCTest
 @testable import UnleashProxyClientSwift
 
-class ThreadSafetyTest: XCTestCase {
+class UnleashThreadSafetyTest: XCTestCase {
 
     func testThreadSafety() {
         // This test demonstrates the thread safety issues in UnleashClient
@@ -9,8 +9,6 @@ class ThreadSafetyTest: XCTestCase {
 
         // Run the test 10 times in a row to increase chances of detecting race conditions
         for run in 1...10 {
-            print("\n=== Starting test run \(run) of 10 ===\n")
-
             // Create a shared client instance
             let unleashClient = UnleashClientBase(
                 unleashUrl: "https://sandbox.getunleash.io/enterprise/api/frontend",
@@ -32,7 +30,6 @@ class ThreadSafetyTest: XCTestCase {
                     for _ in 1...100 {
                         // This can crash due to race conditions in isEnabled
                         let isEnabled = unleashClient.isEnabled(name: "enabled-feature")
-                        print("Thread \(i): Flag is \(isEnabled ? "enabled" : "disabled")")
 
                         // Small sleep to increase chance of thread interleaving
                         Thread.sleep(forTimeInterval: 0.01)
@@ -46,7 +43,6 @@ class ThreadSafetyTest: XCTestCase {
                     for _ in 1...100 {
                         // This can crash due to race conditions in getVariant
                         let variant = unleashClient.getVariant(name: "enabled-feature")
-                        print("Thread \(i): Variant is \(variant.name)")
 
                         // Small sleep to increase chance of thread interleaving
                         Thread.sleep(forTimeInterval: 0.01)
@@ -63,7 +59,6 @@ class ThreadSafetyTest: XCTestCase {
                             "userId": "user-\(j)",
                             "sessionId": "session-\(j)"
                         ])
-                        print("Thread \(i): Updated context with userId user-\(j)")
 
                         // Sleep longer between context updates
                         Thread.sleep(forTimeInterval: 0.1)
@@ -79,28 +74,18 @@ class ThreadSafetyTest: XCTestCase {
                 if result {
                     enabledCount += 1
                 }
-
-                // Print progress every 1000 iterations
-                if i % 1000 == 0 {
-                    print("Completed \(i) dataRaceTest checks...")
-                }
             }
-            print("dataRaceTest results: enabled \(enabledCount) times out of 15000 checks")
 
             // Wait for all operations to complete
             group.wait()
-            print("Run \(run) completed")
 
             // Clean up
             unleashClient.stop()
 
             // Add a small delay between runs to ensure resources are properly released
             if run < 10 {
-                print("Waiting before starting next run...")
                 Thread.sleep(forTimeInterval: 1.0)
             }
         }
-
-        print("\n=== All 10 test runs completed ===\n")
     }
 }
