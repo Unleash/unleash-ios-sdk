@@ -8,6 +8,7 @@ public class UnleashClientBase {
     var poller: Poller
     var metrics: Metrics
     var connectionId: UUID
+    private let queue = DispatchQueue(label: "com.unleash.clientbase", attributes: .concurrent)
 
     public init(
         unleashUrl: String,
@@ -61,7 +62,7 @@ public class UnleashClientBase {
             }
             self.metrics = Metrics(appName: appName, metricsInterval: Double(metricsInterval), clock: { return Date() }, disableMetrics: disableMetrics, poster: urlSessionPoster, url: url, clientKey: clientKey, customHeaders: customHeaders, connectionId: connectionId)
         }
-        
+
         self.context = Context(appName: appName, environment: environment, sessionId: String(Int.random(in: 0..<1_000_000_000)))
         if let providedContext = context {
             self.context = self.calculateContext(context: providedContext)
@@ -73,14 +74,27 @@ public class UnleashClientBase {
         _ printToConsole: Bool = false,
         completionHandler: ((PollerError?) -> Void)? = nil
     ) -> Void {
-        Printer.showPrintStatements = printToConsole
-        self.stopPolling()
-        poller.start(
-            bootstrapping: bootstrap.toggles,
-            context: context,
-            completionHandler: completionHandler
-        )
-        metrics.start()
+        if Thread.isMainThread {
+            Printer.showPrintStatements = printToConsole
+            self.stopPolling()
+            poller.start(
+                bootstrapping: bootstrap.toggles,
+                context: context,
+                completionHandler: completionHandler
+            )
+            metrics.start()
+        } else {
+            DispatchQueue.main.async {
+                Printer.showPrintStatements = printToConsole
+                self.stopPolling()
+                self.poller.start(
+                    bootstrapping: bootstrap.toggles,
+                    context: self.context,
+                    completionHandler: completionHandler
+                )
+                self.metrics.start()
+            }
+        }
     }
 
     private func stopPolling() -> Void {
@@ -94,40 +108,50 @@ public class UnleashClientBase {
     }
 
     public func isEnabled(name: String) -> Bool {
-        let toggle = poller.getFeature(name: name)
-        let enabled = toggle?.enabled ?? false
-        
-        metrics.count(name: name, enabled: enabled)
-        
-        if let toggle = toggle, toggle.impressionData {
-            SwiftEventBus.post("impression", sender: ImpressionEvent(
-                toggleName: name,
-                enabled: enabled,
-                context: context
-            ))
+        return queue.sync {
+            let toggle = poller.getFeature(name: name)
+            let enabled = toggle?.enabled ?? false
+
+            metrics.count(name: name, enabled: enabled)
+
+            if let toggle = toggle, toggle.impressionData {
+                // Dispatch impression event to background queue
+                DispatchQueue.global().async {
+                    SwiftEventBus.post("impression", sender: ImpressionEvent(
+                        toggleName: name,
+                        enabled: enabled,
+                        context: self.context
+                    ))
+                }
+            }
+
+            return enabled
         }
-        
-        return enabled
     }
 
     public func getVariant(name: String) -> Variant {
-        let toggle = poller.getFeature(name: name)
-        let variant = toggle?.variant ?? .defaultDisabled
-        let enabled = toggle?.enabled ?? false
+        return queue.sync {
+            let toggle = poller.getFeature(name: name)
+            let variant = toggle?.variant ?? .defaultDisabled
+            let enabled = toggle?.enabled ?? false
 
-        metrics.count(name: name, enabled: enabled)
-        metrics.countVariant(name: name, variant: variant.name)
-        
-        if let toggle = toggle, toggle.impressionData {   
-            SwiftEventBus.post("impression", sender: ImpressionEvent(
-                toggleName: name,
-                enabled: enabled,
-                variant: variant,
-                context: context
-            ))
+            metrics.count(name: name, enabled: enabled)
+            metrics.countVariant(name: name, variant: variant.name)
+
+            if let toggle = toggle, toggle.impressionData {
+                // Dispatch impression event to background queue
+                DispatchQueue.global().async {
+                    SwiftEventBus.post("impression", sender: ImpressionEvent(
+                        toggleName: name,
+                        enabled: enabled,
+                        variant: variant,
+                        context: self.context
+                    ))
+                }
+            }
+
+            return variant
         }
-        
-        return variant
     }
 
     public func subscribe(name: String, callback: @escaping () -> Void) {
@@ -143,7 +167,7 @@ public class UnleashClientBase {
             }
         }
     }
-    
+
     public func subscribe(_ event: UnleashEvent, callback: @escaping () -> Void) {
         subscribe(name: event.rawValue, callback: callback)
     }
@@ -156,7 +180,7 @@ public class UnleashClientBase {
         let handler: (Notification?) -> Void = { notification in
             callback(notification?.object)
         }
-        
+
         if Thread.isMainThread {
             print("Subscribing to \(name) on main thread with object")
             SwiftEventBus.onMainThread(self, name: name, handler: handler)
@@ -169,14 +193,21 @@ public class UnleashClientBase {
     public func unsubscribe(name: String) {
         SwiftEventBus.unregister(self, name: name)
     }
-    
+
     public func unsubscribe(_ event: UnleashEvent) {
         unsubscribe(name: event.rawValue)
     }
-    
+
     public func updateContext(context: [String: String], properties: [String:String]? = nil, completionHandler: ((PollerError?) -> Void)? = nil) {
-        self.context = self.calculateContext(context: context, properties: properties)
-        self.start(Printer.showPrintStatements, completionHandler: completionHandler)
+        if Thread.isMainThread {
+            self.context = self.calculateContext(context: context, properties: properties)
+            self.start(Printer.showPrintStatements, completionHandler: completionHandler)
+        } else {
+            DispatchQueue.main.async {
+                self.context = self.calculateContext(context: context, properties: properties)
+                self.start(Printer.showPrintStatements, completionHandler: completionHandler)
+            }
+        }
     }
 
     func calculateContext(context: [String: String], properties: [String:String]? = nil) -> Context {
