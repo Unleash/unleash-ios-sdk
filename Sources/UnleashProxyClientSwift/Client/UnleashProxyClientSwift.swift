@@ -74,27 +74,14 @@ public class UnleashClientBase {
         _ printToConsole: Bool = false,
         completionHandler: ((PollerError?) -> Void)? = nil
     ) -> Void {
-        if Thread.isMainThread {
-            Printer.showPrintStatements = printToConsole
-            self.stopPolling()
-            poller.start(
-                bootstrapping: bootstrap.toggles,
-                context: context,
-                completionHandler: completionHandler
-            )
-            metrics.start()
-        } else {
-            DispatchQueue.main.async {
-                Printer.showPrintStatements = printToConsole
+        Printer.showPrintStatements = printToConsole
                 self.stopPolling()
-                self.poller.start(
+                poller.start(
                     bootstrapping: bootstrap.toggles,
-                    context: self.context,
+                    context: context,
                     completionHandler: completionHandler
                 )
-                self.metrics.start()
-            }
-        }
+                metrics.start()
     }
 
     private func stopPolling() -> Void {
