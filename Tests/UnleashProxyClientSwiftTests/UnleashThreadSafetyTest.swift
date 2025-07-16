@@ -1,0 +1,101 @@
+import XCTest
+@testable import UnleashProxyClientSwift
+
+class UnleashThreadSafetyTest: XCTestCase {
+
+    private var shouldRunIntensiveTest: Bool {
+        return ProcessInfo.processInfo.environment["UNLEASH_THREAD_SAFETY_TEST"] == "1"
+    }
+
+    func testThreadSafety() {
+        // Skip the test unless the environment variable is set
+        guard shouldRunIntensiveTest else {
+            print("Skipping UnleashThreadSafetyTest - set UNLEASH_THREAD_SAFETY_TEST=1 to run")
+            return
+        }
+
+        // This test demonstrates the thread safety issues in UnleashClient
+        // by simulating concurrent access from multiple threads to the same client instance
+
+        // Run the test 10 times in a row to increase chances of detecting race conditions
+        for run in 1...10 {
+            // Create a shared client instance
+            let unleashClient = UnleashClientBase(
+                unleashUrl: "https://sandbox.getunleash.io/enterprise/api/frontend",
+                clientKey: "SDKIntegration:development.f0474f4a37e60794ee8fb00a4c112de58befde962af6d5055b383ea3",
+                appName: "testIntegration"
+            )
+
+            // Start the client on the main thread
+            unleashClient.start()
+
+            // Create a dispatch group to wait for all operations to complete
+            let group = DispatchGroup()
+
+            // Simulate multiple threads checking feature flags simultaneously
+            for _ in 1...5 {
+                // Background thread 1: Repeatedly check isEnabled
+                group.enter()
+                DispatchQueue.global().async {
+                    for _ in 1...100 {
+                        // This can crash due to race conditions in isEnabled
+                        _ = unleashClient.isEnabled(name: "enabled-feature")
+
+                        // Small sleep to increase chance of thread interleaving
+                        Thread.sleep(forTimeInterval: 0.01)
+                    }
+                    group.leave()
+                }
+
+                // Background thread 2: Repeatedly check variants
+                group.enter()
+                DispatchQueue.global().async {
+                    for _ in 1...100 {
+                        // This can crash due to race conditions in getVariant
+                        _ = unleashClient.getVariant(name: "enabled-feature")
+
+                        // Small sleep to increase chance of thread interleaving
+                        Thread.sleep(forTimeInterval: 0.01)
+                    }
+                    group.leave()
+                }
+
+                // Background thread 3: Update context occasionally
+                group.enter()
+                DispatchQueue.global().async {
+                    for j in 1...10 {
+                        // This can crash due to race conditions when updating context
+                        unleashClient.updateContext(context: [
+                            "userId": "user-\(j)",
+                            "sessionId": "session-\(j)"
+                        ])
+
+                        // Sleep longer between context updates
+                        Thread.sleep(forTimeInterval: 0.1)
+                    }
+                    group.leave()
+                }
+            }
+
+            // Add a specific test for dataRaceTest flag, similar to the integration test
+            var enabledCount = 0
+            for _ in 1...15000 {
+                let result = unleashClient.isEnabled(name: "dataRaceTest")
+                if result {
+                    enabledCount += 1
+                }
+            }
+
+            // Wait for all operations to complete
+            group.wait()
+
+            // Clean up
+            unleashClient.stop()
+
+            // Add a small delay between runs to ensure resources are properly released
+            if run < 10 {
+                Thread.sleep(forTimeInterval: 1.0)
+            }
+        }
+    }
+}
