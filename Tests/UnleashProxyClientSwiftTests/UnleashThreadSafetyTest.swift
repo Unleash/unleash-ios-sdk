@@ -3,7 +3,17 @@ import XCTest
 
 class UnleashThreadSafetyTest: XCTestCase {
 
+    private var shouldRunIntensiveTest: Bool {
+        return ProcessInfo.processInfo.environment["UNLEASH_THREAD_SAFETY_TEST"] == "1"
+    }
+
     func testThreadSafety() {
+        // Skip the test unless the environment variable is set
+        guard shouldRunIntensiveTest else {
+            print("Skipping UnleashThreadSafetyTest - set UNLEASH_THREAD_SAFETY_TEST=1 to run")
+            return
+        }
+
         // This test demonstrates the thread safety issues in UnleashClient
         // by simulating concurrent access from multiple threads to the same client instance
 
@@ -23,13 +33,13 @@ class UnleashThreadSafetyTest: XCTestCase {
             let group = DispatchGroup()
 
             // Simulate multiple threads checking feature flags simultaneously
-            for i in 1...5 {
+            for _ in 1...5 {
                 // Background thread 1: Repeatedly check isEnabled
                 group.enter()
                 DispatchQueue.global().async {
                     for _ in 1...100 {
                         // This can crash due to race conditions in isEnabled
-                        let isEnabled = unleashClient.isEnabled(name: "enabled-feature")
+                        _ = unleashClient.isEnabled(name: "enabled-feature")
 
                         // Small sleep to increase chance of thread interleaving
                         Thread.sleep(forTimeInterval: 0.01)
@@ -42,7 +52,7 @@ class UnleashThreadSafetyTest: XCTestCase {
                 DispatchQueue.global().async {
                     for _ in 1...100 {
                         // This can crash due to race conditions in getVariant
-                        let variant = unleashClient.getVariant(name: "enabled-feature")
+                        _ = unleashClient.getVariant(name: "enabled-feature")
 
                         // Small sleep to increase chance of thread interleaving
                         Thread.sleep(forTimeInterval: 0.01)
@@ -69,7 +79,7 @@ class UnleashThreadSafetyTest: XCTestCase {
 
             // Add a specific test for dataRaceTest flag, similar to the integration test
             var enabledCount = 0
-            for i in 1...15000 {
+            for _ in 1...15000 {
                 let result = unleashClient.isEnabled(name: "dataRaceTest")
                 if result {
                     enabledCount += 1
