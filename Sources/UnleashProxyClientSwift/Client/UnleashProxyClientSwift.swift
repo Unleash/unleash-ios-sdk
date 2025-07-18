@@ -197,9 +197,15 @@ public class UnleashClientBase {
         unsubscribe(name: event.rawValue)
     }
 
-    public func updateContext(context: [String: String], properties: [String:String]? = nil, completionHandler: ((PollerError?) -> Void)? = nil) {
-        self.context = self.calculateContext(context: context, properties: properties)
-        self.start(Printer.showPrintStatements, completionHandler: completionHandler)
+    public func updateContext(
+        context: [String: String],
+        properties: [String: String]? = nil,
+        completionHandler: ((PollerError?) -> Void)? = nil
+    ) {
+        DispatchQueue.main.async {
+            self.context = self.calculateContext(context: context, properties: properties)
+            self.start(Printer.showPrintStatements, completionHandler: completionHandler)
+        }
     }
 
     func calculateContext(context: [String: String], properties: [String:String]? = nil) -> Context {

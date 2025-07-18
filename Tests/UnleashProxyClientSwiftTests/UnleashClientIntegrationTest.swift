@@ -32,9 +32,7 @@ class UnleashIntegrationTests: XCTestCase {
             XCTAssertNotNil(variant, "Variant should not be nil")
             XCTAssertFalse(variant.enabled, "Variant should be disabled")
 
-            DispatchQueue.main.async {
-                self.unleashClient.updateContext(context: ["clientId": "enabled"]);
-            }
+            self.unleashClient.updateContext(context: ["clientId": "enabled"]);
         })
         
         unleashClient.subscribe(name: "update", callback: {
@@ -70,9 +68,7 @@ class UnleashIntegrationTests: XCTestCase {
             XCTAssertNotNil(variant, "Variant should not be nil")
             XCTAssertFalse(variant.enabled, "Variant should be disabled")
 
-            DispatchQueue.main.async {
-                self.unleashClient.updateContext(context: ["clientId": "enabled"]);
-            }
+            self.unleashClient.updateContext(context: ["clientId": "enabled"]);
         }
         
         unleashClient.subscribe(.update) {
