@@ -11,8 +11,18 @@ public class UnleashClientBase {
     private let queue = DispatchQueue(label: "com.unleash.clientbase", attributes: .concurrent)
 
     public var context: Context {
-        get { queue.sync { _context } }
-        set { queue.async(flags: .barrier) { self._context = newValue } }
+        get {
+            var value: Context!
+            queue.sync {
+                value = self._context
+            }
+            return value
+        }
+        set {
+            queue.async(flags: .barrier) {
+                self._context = newValue
+            }
+        }
     }
 
     public init(
