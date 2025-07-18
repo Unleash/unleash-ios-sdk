@@ -100,50 +100,46 @@ public class UnleashClientBase {
     }
 
     public func isEnabled(name: String) -> Bool {
-        return queue.sync {
-            let toggle = poller.getFeature(name: name)
-            let enabled = toggle?.enabled ?? false
+        let toggle = poller.getFeature(name: name)
+        let enabled = toggle?.enabled ?? false
 
-            metrics.count(name: name, enabled: enabled)
+        metrics.count(name: name, enabled: enabled)
 
-            if let toggle = toggle, toggle.impressionData {
-                // Dispatch impression event to background queue
-                DispatchQueue.global().async {
-                    SwiftEventBus.post("impression", sender: ImpressionEvent(
-                        toggleName: name,
-                        enabled: enabled,
-                        context: self.context
-                    ))
-                }
+        if let toggle = toggle, toggle.impressionData {
+            let contextSnapshot = self.context
+            DispatchQueue.global().async {
+                SwiftEventBus.post("impression", sender: ImpressionEvent(
+                    toggleName: name,
+                    enabled: enabled,
+                    context: contextSnapshot
+                ))
             }
-
-            return enabled
         }
+
+        return enabled
     }
 
     public func getVariant(name: String) -> Variant {
-        return queue.sync {
-            let toggle = poller.getFeature(name: name)
-            let variant = toggle?.variant ?? .defaultDisabled
-            let enabled = toggle?.enabled ?? false
+        let toggle = poller.getFeature(name: name)
+        let variant = toggle?.variant ?? .defaultDisabled
+        let enabled = toggle?.enabled ?? false
 
-            metrics.count(name: name, enabled: enabled)
-            metrics.countVariant(name: name, variant: variant.name)
+        metrics.count(name: name, enabled: enabled)
+        metrics.countVariant(name: name, variant: variant.name)
 
-            if let toggle = toggle, toggle.impressionData {
-                // Dispatch impression event to background queue
-                DispatchQueue.global().async {
-                    SwiftEventBus.post("impression", sender: ImpressionEvent(
-                        toggleName: name,
-                        enabled: enabled,
-                        variant: variant,
-                        context: self.context
-                    ))
-                }
+        if let toggle = toggle, toggle.impressionData {
+            let contextSnapshot = self.context
+            DispatchQueue.global().async {
+                SwiftEventBus.post("impression", sender: ImpressionEvent(
+                    toggleName: name,
+                    enabled: enabled,
+                    variant: variant,
+                    context: contextSnapshot
+                ))
             }
-
-            return variant
         }
+
+        return variant
     }
 
     public func subscribe(name: String, callback: @escaping () -> Void) {

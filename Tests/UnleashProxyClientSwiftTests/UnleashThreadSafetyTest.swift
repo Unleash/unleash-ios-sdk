@@ -30,7 +30,7 @@ class UnleashThreadSafetyTest: XCTestCase {
         // Run the test with high iteration count to increase chances of detecting race conditions
         for _ in 0..<10000 {
             // Update context with userId and isAuthenticated properties
-
+            client.updateContext(context: ["userId": "1"], properties: ["isAuthenticated": "true"]) { _ in }
 
             // Background thread 1: Check if boolean parameter is enabled
             DispatchQueue.global(qos: .userInitiated).async {
