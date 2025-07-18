@@ -101,12 +101,11 @@ public class UnleashClientBase {
         metrics.count(name: name, enabled: enabled)
 
         if let toggle = toggle, toggle.impressionData {
-            let contextSnapshot = self.context
             DispatchQueue.global().async {
                 SwiftEventBus.post("impression", sender: ImpressionEvent(
                     toggleName: name,
                     enabled: enabled,
-                    context: contextSnapshot
+                    context: self.context
                 ))
             }
         }
@@ -123,13 +122,12 @@ public class UnleashClientBase {
         metrics.countVariant(name: name, variant: variant.name)
 
         if let toggle = toggle, toggle.impressionData {
-            let contextSnapshot = self.context
             DispatchQueue.global().async {
                 SwiftEventBus.post("impression", sender: ImpressionEvent(
                     toggleName: name,
                     enabled: enabled,
                     variant: variant,
-                    context: contextSnapshot
+                    context: self.context
                 ))
             }
         }
