@@ -91,9 +91,10 @@ public class UnleashClientBase {
     ) -> Void {
         Printer.showPrintStatements = printToConsole
                 self.stopPolling()
+                let ctx = self.context
                 poller.start(
                     bootstrapping: bootstrap.toggles,
-                    context: context,
+                    context: ctx,
                     completionHandler: completionHandler
                 )
                 metrics.start()
@@ -197,15 +198,8 @@ public class UnleashClientBase {
     }
 
     public func updateContext(context: [String: String], properties: [String:String]? = nil, completionHandler: ((PollerError?) -> Void)? = nil) {
-        if Thread.isMainThread {
-            self.context = self.calculateContext(context: context, properties: properties)
-            self.start(Printer.showPrintStatements, completionHandler: completionHandler)
-        } else {
-            DispatchQueue.main.async {
-                self.context = self.calculateContext(context: context, properties: properties)
-                self.start(Printer.showPrintStatements, completionHandler: completionHandler)
-            }
-        }
+        self.context = self.calculateContext(context: context, properties: properties)
+        self.start(Printer.showPrintStatements, completionHandler: completionHandler)
     }
 
     func calculateContext(context: [String: String], properties: [String:String]? = nil) -> Context {
