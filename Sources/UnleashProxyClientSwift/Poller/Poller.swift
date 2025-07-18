@@ -5,7 +5,7 @@ public class Poller {
     var refreshInterval: Int?
     var unleashUrl: URL
     var timer: Timer?
-    var ready: Bool = false
+    var ready: Bool
     var apiKey: String;
     var etag: String;
     var appName: String;
@@ -36,6 +36,7 @@ public class Poller {
         self.appName = appName
         self.connectionId = connectionId
         self.timer = nil
+        self.ready = false
         self.etag = ""
         self.session = session
         self.storageProvider = storageProvider

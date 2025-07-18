@@ -76,10 +76,9 @@ public class UnleashClientBase {
     ) -> Void {
         Printer.showPrintStatements = printToConsole
                 self.stopPolling()
-                let ctx = self.context
                 poller.start(
                     bootstrapping: bootstrap.toggles,
-                    context: ctx,
+                    context: context,
                     completionHandler: completionHandler
                 )
                 metrics.start()
