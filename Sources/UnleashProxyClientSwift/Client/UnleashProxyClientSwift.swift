@@ -3,7 +3,22 @@ import SwiftEventBus
 
 @available(macOS 10.15, *)
 public class UnleashClientBase {
-    public var context: Context
+    private var _context: Context
+
+    public var context: Context {
+            get {
+                var value: Context!
+                queue.sync {
+                    value = self._context
+                }
+                return value
+            }
+            set {
+                queue.async(flags: .barrier) {
+                    self._context = newValue
+                }
+            }
+        }
     var timer: Timer?
     var poller: Poller
     var metrics: Metrics
@@ -63,9 +78,9 @@ public class UnleashClientBase {
             self.metrics = Metrics(appName: appName, metricsInterval: Double(metricsInterval), clock: { return Date() }, disableMetrics: disableMetrics, poster: urlSessionPoster, url: url, clientKey: clientKey, customHeaders: customHeaders, connectionId: connectionId)
         }
 
-        self.context = Context(appName: appName, environment: environment, sessionId: String(Int.random(in: 0..<1_000_000_000)))
+        self._context = Context(appName: appName, environment: environment, sessionId: String(Int.random(in: 0..<1_000_000_000)))
         if let providedContext = context {
-            self.context = self.calculateContext(context: providedContext)
+            self._context = self.calculateContext(context: providedContext)
         }
     }
 
@@ -184,8 +199,10 @@ public class UnleashClientBase {
         properties: [String: String]? = nil,
         completionHandler: ((PollerError?) -> Void)? = nil
     ) {
-        DispatchQueue.main.async {
-            self.context = self.calculateContext(context: context, properties: properties)
+        let newContext = self.calculateContext(context: context, properties: properties)
+        self.context = newContext
+
+        DispatchQueue.global().async {
             self.start(Printer.showPrintStatements, completionHandler: completionHandler)
         }
     }
@@ -205,7 +222,7 @@ public class UnleashClientBase {
         }
 
         let sessionId = context["sessionId"] ?? self.context.sessionId;
-        
+
         let newContext = Context(
             appName: self.context.appName,
             environment: self.context.environment,
@@ -236,7 +253,7 @@ public class UnleashClient: UnleashClientBase, ObservableObject {
             }
         }
     }
-    
+
     @MainActor
     public func updateContext(
         context: [String: String],
