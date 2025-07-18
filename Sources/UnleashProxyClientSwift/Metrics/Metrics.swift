@@ -36,19 +36,24 @@ public class Metrics {
         self.connectionId = connectionId
     }
 
+    private let queue = DispatchQueue(label: "io.getunleash.metrics")
+
     func start() {
         if disableMetrics { return }
 
-        self.timer = Timer.scheduledTimer(withTimeInterval: metricsInterval, repeats: true) { _ in
-            self.sendMetrics()
+        queue.sync {
+            self.timer = Timer.scheduledTimer(withTimeInterval: metricsInterval, repeats: true) { _ in
+                self.sendMetrics()
+            }
         }
     }
 
     func stop() {
-        self.timer?.invalidate()
+        queue.sync {
+            self.timer?.invalidate()
+            self.timer = nil
+        }
     }
-    
-    private let queue = DispatchQueue(label: "io.getunleash.metrics")
 
     func count(name: String, enabled: Bool) {
         if disableMetrics { return }
@@ -75,11 +80,14 @@ public class Metrics {
     }
 
     func sendMetrics() {
-        bucket.closeBucket()
-        guard !bucket.isEmpty() else { return }
+        let localBucket: Bucket = queue.sync {
+            bucket.closeBucket()
+            let result = bucket
+            bucket = Bucket(clock: clock)
+            return result
+        }
 
-        let localBucket = bucket
-        bucket = Bucket(clock: clock)
+        guard !localBucket.isEmpty() else { return }
 
         do {
             let payload = MetricsPayload(appName: appName, instanceId: "swift", bucket: localBucket)

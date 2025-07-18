@@ -3,12 +3,17 @@ import SwiftEventBus
 
 @available(macOS 10.15, *)
 public class UnleashClientBase {
-    public var context: Context
+    private var _context: Context
     var timer: Timer?
     var poller: Poller
     var metrics: Metrics
     var connectionId: UUID
     private let queue = DispatchQueue(label: "com.unleash.clientbase", attributes: .concurrent)
+
+    public var context: Context {
+        get { queue.sync { _context } }
+        set { queue.async(flags: .barrier) { self._context = newValue } }
+    }
 
     public init(
         unleashUrl: String,
@@ -63,9 +68,9 @@ public class UnleashClientBase {
             self.metrics = Metrics(appName: appName, metricsInterval: Double(metricsInterval), clock: { return Date() }, disableMetrics: disableMetrics, poster: urlSessionPoster, url: url, clientKey: clientKey, customHeaders: customHeaders, connectionId: connectionId)
         }
 
-        self.context = Context(appName: appName, environment: environment, sessionId: String(Int.random(in: 0..<1_000_000_000)))
+        self._context = Context(appName: appName, environment: environment, sessionId: String(Int.random(in: 0..<1_000_000_000)))
         if let providedContext = context {
-            self.context = self.calculateContext(context: providedContext)
+            self._context = self.calculateContext(context: providedContext)
         }
     }
 
