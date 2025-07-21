@@ -2,12 +2,12 @@ import Foundation
 
 public class DictionaryStorageProvider: StorageProvider {
     private var storage: [String: Toggle] = [:]
-    private let queue = DispatchQueue(label: "com.unleash.storage", attributes: .concurrent)
+    private let queue = DispatchQueue(label: "com.unleash.storage")
 
     public init() {}
 
     public func set(values: [String: Toggle]) {
-        queue.async(flags: .barrier) {
+        queue.async {
             self.storage = values
         }
     }
@@ -19,7 +19,7 @@ public class DictionaryStorageProvider: StorageProvider {
     }
 
     public func clear() {
-        queue.async(flags: .barrier) {
+        queue.async {
             self.storage = [:]
         }
     }

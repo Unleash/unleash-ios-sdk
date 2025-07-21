@@ -112,6 +112,7 @@ public class UnleashClientBase {
     public func isEnabled(name: String) -> Bool {
         let toggle = poller.getFeature(name: name)
         let enabled = toggle?.enabled ?? false
+        let contextSnapshot = queue.sync { self._context }
 
         metrics.count(name: name, enabled: enabled)
 
@@ -120,7 +121,7 @@ public class UnleashClientBase {
                 SwiftEventBus.post("impression", sender: ImpressionEvent(
                     toggleName: name,
                     enabled: enabled,
-                    context: self.context
+                    context: contextSnapshot
                 ))
             }
         }
@@ -132,7 +133,8 @@ public class UnleashClientBase {
         let toggle = poller.getFeature(name: name)
         let variant = toggle?.variant ?? .defaultDisabled
         let enabled = toggle?.enabled ?? false
-
+        let contextSnapshot = queue.sync { self._context }
+        
         metrics.count(name: name, enabled: enabled)
         metrics.countVariant(name: name, variant: variant.name)
 
@@ -142,7 +144,7 @@ public class UnleashClientBase {
                     toggleName: name,
                     enabled: enabled,
                     variant: variant,
-                    context: self.context
+                    context: contextSnapshot
                 ))
             }
         }
