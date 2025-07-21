@@ -44,8 +44,16 @@ public class Metrics {
         if disableMetrics { return }
 
         queue.sync {
-            self.timer = Timer.scheduledTimer(withTimeInterval: metricsInterval, repeats: true) { _ in
-                self.sendMetrics()
+            self.timer?.invalidate()
+            self.timer = nil
+            
+            DispatchQueue.main.async {
+                let timer = Timer.scheduledTimer(withTimeInterval: self.metricsInterval, repeats: true) { _ in
+                    self.sendMetrics()
+                }
+                self.queue.sync {
+                    self.timer = timer
+                }
             }
         }
     }
