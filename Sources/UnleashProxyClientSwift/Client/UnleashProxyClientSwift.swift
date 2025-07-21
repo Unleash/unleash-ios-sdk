@@ -90,13 +90,13 @@ public class UnleashClientBase {
         completionHandler: ((PollerError?) -> Void)? = nil
     ) -> Void {
         Printer.showPrintStatements = printToConsole
-                self.stopPolling()
-                poller.start(
-                    bootstrapping: bootstrap.toggles,
-                    context: context,
-                    completionHandler: completionHandler
-                )
-                metrics.start()
+        self.stopPolling()
+        poller.start(
+            bootstrapping: bootstrap.toggles,
+            context: context,
+            completionHandler: completionHandler
+        )
+        metrics.start()
     }
 
     private func stopPolling() -> Void {
@@ -105,7 +105,9 @@ public class UnleashClientBase {
     }
 
     public func stop() -> Void {
-        self.stopPolling();
+        self.stopPolling()
+        timer?.cancel()
+        timer = nil
         UnleashEvent.allCases.forEach { self.unsubscribe($0) }
     }
 
