@@ -9,7 +9,7 @@ public class Metrics {
     let poster: PosterHandler
     let clock: () -> Date
     var disableMetrics: Bool
-    var timer: Timer?
+    var timer: DispatchSourceTimer?
     var bucket: Bucket
     let url: URL
     let customHeaders: [String: String]
@@ -44,23 +44,24 @@ public class Metrics {
         if disableMetrics { return }
 
         queue.sync {
-            self.timer?.invalidate()
+            self.timer?.cancel()
             self.timer = nil
-            
-            DispatchQueue.main.async {
-                let timer = Timer.scheduledTimer(withTimeInterval: self.metricsInterval, repeats: true) { _ in
-                    self.sendMetrics()
-                }
-                self.queue.sync {
-                    self.timer = timer
-                }
+
+            let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .background))
+            timer.schedule(deadline: .now() + self.metricsInterval, repeating: self.metricsInterval)
+            timer.setEventHandler { [weak self] in
+                guard let self = self else { return }
+                self.sendMetrics()
             }
+            timer.resume()
+
+            self.timer = timer
         }
     }
 
     func stop() {
         queue.sync {
-            self.timer?.invalidate()
+            self.timer?.cancel()
             self.timer = nil
         }
     }
