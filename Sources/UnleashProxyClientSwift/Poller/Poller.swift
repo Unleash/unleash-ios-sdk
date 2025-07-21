@@ -183,7 +183,7 @@ public class Poller {
             var result: FeatureResponse?
 
             if let newEtag = httpResponse.allHeaderFields["Etag"] as? String, !newEtag.isEmpty {
-                self.syncQueue.async {
+                self.syncQueue.sync {
                     self.etag = newEtag
                 }
             }

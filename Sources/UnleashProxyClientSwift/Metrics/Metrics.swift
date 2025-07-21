@@ -15,6 +15,8 @@ public class Metrics {
     let customHeaders: [String: String]
     let connectionId: UUID
 
+    private let queue: DispatchQueue
+
     init(appName: String,
          metricsInterval: TimeInterval,
          clock: @escaping () -> Date,
@@ -23,7 +25,8 @@ public class Metrics {
          url: URL,
          clientKey: String,
          customHeaders: [String: String] = [:],
-         connectionId: UUID) {
+         connectionId: UUID,
+         queue: DispatchQueue = DispatchQueue(label: "io.getunleash.metrics")) {
         self.appName = appName
         self.metricsInterval = metricsInterval
         self.clock = clock
@@ -34,9 +37,8 @@ public class Metrics {
         self.bucket = Bucket(clock: clock)
         self.customHeaders = customHeaders
         self.connectionId = connectionId
+        self.queue = queue
     }
-
-    private let queue = DispatchQueue(label: "io.getunleash.metrics")
 
     func start() {
         if disableMetrics { return }
