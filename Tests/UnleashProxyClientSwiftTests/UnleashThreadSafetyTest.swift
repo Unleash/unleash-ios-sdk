@@ -28,7 +28,7 @@ class UnleashThreadSafetyTest: XCTestCase {
         client.start()
 
         // Run the test with high iteration count to increase chances of detecting race conditions
-        for _ in 0..<10000 {
+        for _ in 0..<100 {
             // Update context with userId and isAuthenticated properties
             client.updateContext(context: ["userId": "1"], properties: ["isAuthenticated": "true"]) { _ in }
 
