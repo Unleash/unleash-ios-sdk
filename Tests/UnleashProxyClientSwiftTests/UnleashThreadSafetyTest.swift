@@ -17,6 +17,9 @@ class UnleashThreadSafetyTest: XCTestCase {
         // This test demonstrates the thread safety of UnleashClient
         // by simulating concurrent access from multiple threads to the same client instance
 
+        // Create an expectation to ensure the test doesn't hang
+        let expectation = XCTestExpectation(description: "Thread safety test completed")
+
         // Create a shared client instance
         let client = UnleashClientBase(
             unleashUrl: "https://sandbox.getunleash.io/enterprise/api/frontend",
@@ -28,7 +31,7 @@ class UnleashThreadSafetyTest: XCTestCase {
         client.start()
 
         // Run the test with high iteration count to increase chances of detecting race conditions
-        for _ in 0..<100 {
+        for _ in 0..<10000 {
             // Update context with userId and isAuthenticated properties
             client.updateContext(context: ["userId": "1"], properties: ["isAuthenticated": "true"]) { _ in }
 
@@ -48,10 +51,19 @@ class UnleashThreadSafetyTest: XCTestCase {
             }
         }
 
-        // Give background operations a chance to complete
-        Thread.sleep(forTimeInterval: 2.0)
+        // Use a background queue to avoid blocking the main thread
+        DispatchQueue.global().async {
+            // Give background operations a chance to complete
+            Thread.sleep(forTimeInterval: 2.0)
 
-        // Clean up
-        client.stop()
+            // Clean up
+            client.stop()
+
+            // Mark the expectation as fulfilled
+            expectation.fulfill()
+        }
+
+        // Wait for the expectation to be fulfilled with a timeout
+        wait(for: [expectation], timeout: 10.0) // 10 second timeout
     }
 }
