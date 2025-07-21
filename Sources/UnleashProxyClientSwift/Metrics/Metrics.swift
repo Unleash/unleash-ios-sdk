@@ -46,15 +46,17 @@ public class Metrics {
         queue.sync {
             self.timer?.cancel()
             self.timer = nil
+        }
 
-            let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .background))
-            timer.schedule(deadline: .now() + self.metricsInterval, repeating: self.metricsInterval)
-            timer.setEventHandler { [weak self] in
-                guard let self = self else { return }
-                self.sendMetrics()
-            }
-            timer.resume()
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .background))
+        timer.schedule(deadline: .now() + self.metricsInterval, repeating: self.metricsInterval)
+        timer.setEventHandler { [weak self] in
+            guard let self = self else { return }
+            self.sendMetrics()
+        }
+        timer.resume()
 
+        queue.sync {
             self.timer = timer
         }
     }
