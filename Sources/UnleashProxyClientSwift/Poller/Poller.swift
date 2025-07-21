@@ -4,7 +4,7 @@ import SwiftEventBus
 public class Poller {
     var refreshInterval: Int?
     var unleashUrl: URL
-    var timer: Timer?
+    var timer: DispatchSourceTimer?
     var ready: Bool
     var apiKey: String;
     var etag: String;
@@ -68,20 +68,22 @@ public class Poller {
 
         let interval = Double(syncQueue.sync { self.refreshInterval ?? 15 })
 
-        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { timer in
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .background))
+        timer.schedule(deadline: .now() + interval, repeating: interval)
+        timer.setEventHandler { [weak self] in
+            guard let self = self else { return }
             self.getFeatures(context: context)
         }
+        timer.resume()
 
         self.syncQueue.sync {
             self.timer = timer
         }
-
-        RunLoop.current.add(timer, forMode: .default)
     }
 
     public func stop() {
         self.syncQueue.sync {
-            self.timer?.invalidate()
+            self.timer?.cancel()
             self.timer = nil
         }
     }

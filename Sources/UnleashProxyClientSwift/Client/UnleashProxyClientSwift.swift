@@ -19,7 +19,7 @@ public class UnleashClientBase {
                 }
             }
         }
-    var timer: Timer?
+    var timer: DispatchSourceTimer?
     var poller: Poller
     var metrics: Metrics
     var connectionId: UUID
@@ -116,7 +116,7 @@ public class UnleashClientBase {
         metrics.count(name: name, enabled: enabled)
 
         if let toggle = toggle, toggle.impressionData {
-            DispatchQueue.global().async {
+            DispatchQueue.global(qos: .background).async {
                 SwiftEventBus.post("impression", sender: ImpressionEvent(
                     toggleName: name,
                     enabled: enabled,
@@ -137,7 +137,7 @@ public class UnleashClientBase {
         metrics.countVariant(name: name, variant: variant.name)
 
         if let toggle = toggle, toggle.impressionData {
-            DispatchQueue.global().async {
+            DispatchQueue.global(qos: .background).async {
                 SwiftEventBus.post("impression", sender: ImpressionEvent(
                     toggleName: name,
                     enabled: enabled,
@@ -202,7 +202,7 @@ public class UnleashClientBase {
         let newContext = self.calculateContext(context: context, properties: properties)
         self.context = newContext
 
-        DispatchQueue.global().async {
+        DispatchQueue.global(qos: .background).async {
             self.start(Printer.showPrintStatements, completionHandler: completionHandler)
         }
     }
