@@ -62,17 +62,13 @@ public class Poller {
             completionHandler?(nil)
         }
 
-        lock.lock()
         let refreshIntervalValue = self.refreshInterval
-        lock.unlock()
 
         if refreshIntervalValue == 0 {
             return
         }
 
-        lock.lock()
-        let interval = Double(self.refreshInterval ?? 15)
-        lock.unlock()
+        let interval = Double(refreshIntervalValue ?? 15)
 
         let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .background))
         timer.schedule(deadline: .now() + interval, repeating: interval)
@@ -95,9 +91,7 @@ public class Poller {
     }
 
     func formatURL(context: Context) -> URL? {
-        lock.lock()
         let url = self.unleashUrl
-        lock.unlock()
 
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.percentEncodedQuery = context
