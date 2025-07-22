@@ -136,32 +136,18 @@ public class Metrics {
     }
 
     func createRequest(payload: Data) -> URLRequest {
-        let urlValue: URL
-        let clientKeyValue: String
-        let appNameValue: String
-        let connectionIdValue: UUID
-        let customHeadersValue: [String: String]
-        
-        lock.lock()
-        urlValue = self.url
-        clientKeyValue = self.clientKey
-        appNameValue = self.appName
-        connectionIdValue = self.connectionId
-        customHeadersValue = self.customHeaders
-        lock.unlock()
-
-        var request = URLRequest(url: urlValue.appendingPathComponent("client/metrics"))
+        var request = URLRequest(url: url.appendingPathComponent("client/metrics"))
         request.httpMethod = "POST"
         request.httpBody = payload
         request.addValue("application/json", forHTTPHeaderField: "Accept")
         request.addValue("no-cache", forHTTPHeaderField: "Cache")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue(clientKeyValue, forHTTPHeaderField: "Authorization")
-        request.addValue(appNameValue, forHTTPHeaderField: "unleash-appname")
-        request.addValue(connectionIdValue.uuidString, forHTTPHeaderField: "unleash-connection-id")
+        request.addValue(clientKey, forHTTPHeaderField: "Authorization")
+        request.addValue(appName, forHTTPHeaderField: "unleash-appname")
+        request.addValue(connectionId.uuidString, forHTTPHeaderField: "unleash-connection-id")
         request.setValue("unleash-client-swift:\(LibraryInfo.version)", forHTTPHeaderField: "unleash-sdk")
-        if !customHeadersValue.isEmpty {
-            for (key, value) in customHeadersValue {
+        if !customHeaders.isEmpty {
+            for (key, value) in customHeaders {
                 request.setValue(value, forHTTPHeaderField: key)
             }
         }

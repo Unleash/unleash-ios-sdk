@@ -140,27 +140,19 @@ public class Poller {
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        let apiKeyValue: String
         let currentEtag: String
-        let appNameValue: String
-        let connectionIdValue: UUID
-        let customHeadersValue: [String: String]
         
         lock.lock()
-        apiKeyValue = self.apiKey
         currentEtag = self.etag
-        appNameValue = self.appName
-        connectionIdValue = self.connectionId
-        customHeadersValue = self.customHeaders
         lock.unlock()
 
-        request.setValue(apiKeyValue, forHTTPHeaderField: "Authorization")
+        request.setValue(apiKey, forHTTPHeaderField: "Authorization")
         request.setValue(currentEtag, forHTTPHeaderField: "If-None-Match")
-        request.setValue(appNameValue, forHTTPHeaderField: "unleash-appname")
-        request.setValue(connectionIdValue.uuidString, forHTTPHeaderField: "unleash-connection-id")
+        request.setValue(appName, forHTTPHeaderField: "unleash-appname")
+        request.setValue(connectionId.uuidString, forHTTPHeaderField: "unleash-connection-id")
         request.setValue("unleash-client-swift:\(LibraryInfo.version)", forHTTPHeaderField: "unleash-sdk")
 
-        let customHeaders = customHeadersValue.merging(self.customHeadersProvider.getCustomHeaders()) { (_, new) in
+        let customHeaders = self.customHeaders.merging(self.customHeadersProvider.getCustomHeaders()) { (_, new) in
             new
         }.filter { key, _ in !isSensitiveHeader(key) }
 
