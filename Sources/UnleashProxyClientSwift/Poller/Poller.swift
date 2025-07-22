@@ -140,12 +140,18 @@ public class Poller {
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
+        let apiKeyValue: String
+        let currentEtag: String
+        let appNameValue: String
+        let connectionIdValue: UUID
+        let customHeadersValue: [String: String]
+        
         lock.lock()
-        let apiKeyValue = self.apiKey
-        let currentEtag = self.etag
-        let appNameValue = self.appName
-        let connectionIdValue = self.connectionId
-        let customHeadersValue = self.customHeaders
+        apiKeyValue = self.apiKey
+        currentEtag = self.etag
+        appNameValue = self.appName
+        connectionIdValue = self.connectionId
+        customHeadersValue = self.customHeaders
         lock.unlock()
 
         request.setValue(apiKeyValue, forHTTPHeaderField: "Authorization")

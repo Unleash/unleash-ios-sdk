@@ -104,10 +104,13 @@ public class Metrics {
     }
 
     func sendMetrics() {
+        let localBucket: Bucket
+        let clockFunction: () -> Date
+        
         lock.lock()
         bucket.closeBucket()
-        let localBucket = bucket
-        let clockFunction = self.clock
+        localBucket = bucket
+        clockFunction = self.clock
         bucket = Bucket(clock: clockFunction)
         lock.unlock()
 
@@ -133,12 +136,18 @@ public class Metrics {
     }
 
     func createRequest(payload: Data) -> URLRequest {
+        let urlValue: URL
+        let clientKeyValue: String
+        let appNameValue: String
+        let connectionIdValue: UUID
+        let customHeadersValue: [String: String]
+        
         lock.lock()
-        let urlValue = self.url
-        let clientKeyValue = self.clientKey
-        let appNameValue = self.appName
-        let connectionIdValue = self.connectionId
-        let customHeadersValue = self.customHeaders
+        urlValue = self.url
+        clientKeyValue = self.clientKey
+        appNameValue = self.appName
+        connectionIdValue = self.connectionId
+        customHeadersValue = self.customHeaders
         lock.unlock()
 
         var request = URLRequest(url: urlValue.appendingPathComponent("client/metrics"))
