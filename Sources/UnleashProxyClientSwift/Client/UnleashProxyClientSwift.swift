@@ -23,7 +23,7 @@ public class UnleashClientBase {
     var poller: Poller
     var metrics: Metrics
     var connectionId: UUID
-    private let queue = DispatchQueue(label: "com.unleash.clientbase", attributes: .concurrent)
+    private let queue = DispatchQueue(label: "com.unleash.clientbase")
 
     public init(
         unleashUrl: String,

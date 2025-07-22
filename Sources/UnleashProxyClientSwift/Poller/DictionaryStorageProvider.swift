@@ -2,7 +2,7 @@ import Foundation
 
 public class DictionaryStorageProvider: StorageProvider {
     private var storage: [String: Toggle] = [:]
-    private let queue = DispatchQueue(label: "com.unleash.storage", attributes: .concurrent)
+    private let queue = DispatchQueue(label: "com.unleash.storage")
 
     public init() {}
 
