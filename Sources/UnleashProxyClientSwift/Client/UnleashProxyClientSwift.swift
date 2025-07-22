@@ -7,23 +7,22 @@ public class UnleashClientBase {
 
     public var context: Context {
             get {
-                var value: Context!
-                queue.sync {
-                    value = self._context
-                }
+                lock.lock()
+                let value = self._context
+                lock.unlock()
                 return value
             }
             set {
-                queue.async(flags: .barrier) {
-                    self._context = newValue
-                }
+                lock.lock()
+                self._context = newValue
+                lock.unlock()
             }
         }
     var timer: DispatchSourceTimer?
     var poller: Poller
     var metrics: Metrics
     var connectionId: UUID
-    private let queue = DispatchQueue(label: "com.unleash.clientbase", attributes: .concurrent)
+    private let lock = NSLock()
 
     public init(
         unleashUrl: String,
@@ -106,15 +105,19 @@ public class UnleashClientBase {
 
     public func stop() -> Void {
         self.stopPolling()
+        lock.lock()
         timer?.cancel()
         timer = nil
+        lock.unlock()
         UnleashEvent.allCases.forEach { self.unsubscribe($0) }
     }
 
     public func isEnabled(name: String) -> Bool {
         let toggle = poller.getFeature(name: name)
         let enabled = toggle?.enabled ?? false
-        let contextSnapshot = queue.sync { self._context }
+        lock.lock()
+        let contextSnapshot = self._context
+        lock.unlock()
 
         metrics.count(name: name, enabled: enabled)
 
@@ -135,8 +138,10 @@ public class UnleashClientBase {
         let toggle = poller.getFeature(name: name)
         let variant = toggle?.variant ?? .defaultDisabled
         let enabled = toggle?.enabled ?? false
-        let contextSnapshot = queue.sync { self._context }
-        
+        lock.lock()
+        let contextSnapshot = self._context
+        lock.unlock()
+
         metrics.count(name: name, enabled: enabled)
         metrics.countVariant(name: name, variant: variant.name)
 
@@ -225,11 +230,15 @@ public class UnleashClientBase {
             newProperties[key] = value
         }
 
-        let sessionId = context["sessionId"] ?? self.context.sessionId;
+        lock.lock()
+        let currentContext = self._context
+        lock.unlock()
+
+        let sessionId = context["sessionId"] ?? currentContext.sessionId;
 
         let newContext = Context(
-            appName: self.context.appName,
-            environment: self.context.environment,
+            appName: currentContext.appName,
+            environment: currentContext.environment,
             userId: context["userId"],
             sessionId: sessionId,
             remoteAddress: context["remoteAddress"],

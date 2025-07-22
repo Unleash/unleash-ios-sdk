@@ -8,20 +8,29 @@
 import Foundation
 
 class Printer {
-    private static let queue = DispatchQueue(label: "com.unleash.printer")
+    private static let lock = NSLock()
     private static var _showPrintStatements = false
-    
+
     static var showPrintStatements: Bool {
         get {
-            return queue.sync { _showPrintStatements }
+            lock.lock()
+            let value = _showPrintStatements
+            lock.unlock()
+            return value
         }
         set {
-            queue.sync { _showPrintStatements = newValue }
+            lock.lock()
+            _showPrintStatements = newValue
+            lock.unlock()
         }
     }
-    
+
     static func printMessage(_ items: Any..., separator: String = " ", terminator: String = "\n") {
-        if showPrintStatements {
+        lock.lock()
+        let shouldPrint = _showPrintStatements
+        lock.unlock()
+
+        if shouldPrint {
             print(items, separator: separator, terminator: terminator)
         }
     }

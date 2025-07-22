@@ -2,25 +2,26 @@ import Foundation
 
 public class DictionaryStorageProvider: StorageProvider {
     private var storage: [String: Toggle] = [:]
-    private let queue = DispatchQueue(label: "com.unleash.storage", attributes: .concurrent)
+    private let lock = NSLock()
 
     public init() {}
 
     public func set(values: [String: Toggle]) {
-        queue.async(flags: .barrier){
-            self.storage = values
-        }
+        lock.lock()
+        self.storage = values
+        lock.unlock()
     }
 
     public func value(key: String) -> Toggle? {
-        queue.sync {
-            return self.storage[key]
-        }
+        lock.lock()
+        let result = self.storage[key]
+        lock.unlock()
+        return result
     }
 
     public func clear() {
-        queue.async(flags: .barrier) {
-            self.storage = [:]
-        }
+        lock.lock()
+        self.storage = [:]
+        lock.unlock()
     }
 }

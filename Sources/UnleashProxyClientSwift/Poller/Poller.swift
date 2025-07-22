@@ -16,7 +16,7 @@ public class Poller {
     let customHeaders: [String: String]
     let customHeadersProvider: CustomHeadersProvider
 
-    private let syncQueue = DispatchQueue(label: "com.unleash.poller.sync")
+    private let lock = NSLock()
 
     public init(
         refreshInterval: Int? = nil,
@@ -62,11 +62,17 @@ public class Poller {
             completionHandler?(nil)
         }
 
-        if self.syncQueue.sync(execute: { self.refreshInterval }) == 0 {
+        lock.lock()
+        let refreshIntervalValue = self.refreshInterval
+        lock.unlock()
+
+        if refreshIntervalValue == 0 {
             return
         }
 
-        let interval = Double(syncQueue.sync { self.refreshInterval ?? 15 })
+        lock.lock()
+        let interval = Double(self.refreshInterval ?? 15)
+        lock.unlock()
 
         let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .background))
         timer.schedule(deadline: .now() + interval, repeating: interval)
@@ -76,20 +82,24 @@ public class Poller {
         }
         timer.resume()
 
-        self.syncQueue.sync {
-            self.timer = timer
-        }
+        lock.lock()
+        self.timer = timer
+        lock.unlock()
     }
 
     public func stop() {
-        self.syncQueue.sync {
-            self.timer?.cancel()
-            self.timer = nil
-        }
+        lock.lock()
+        self.timer?.cancel()
+        self.timer = nil
+        lock.unlock()
     }
 
     func formatURL(context: Context) -> URL? {
-        var components = URLComponents(url: unleashUrl, resolvingAgainstBaseURL: false)
+        lock.lock()
+        let url = self.unleashUrl
+        lock.unlock()
+
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.percentEncodedQuery = context
             .toURIMap()
             .compactMap { key, value in
@@ -129,16 +139,22 @@ public class Poller {
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(self.apiKey, forHTTPHeaderField: "Authorization")
 
-        let currentEtag = syncQueue.sync { self.etag }
+        lock.lock()
+        let apiKeyValue = self.apiKey
+        let currentEtag = self.etag
+        let appNameValue = self.appName
+        let connectionIdValue = self.connectionId
+        let customHeadersValue = self.customHeaders
+        lock.unlock()
+
+        request.setValue(apiKeyValue, forHTTPHeaderField: "Authorization")
         request.setValue(currentEtag, forHTTPHeaderField: "If-None-Match")
-
-        request.setValue(self.appName, forHTTPHeaderField: "unleash-appname")
-        request.setValue(self.connectionId.uuidString, forHTTPHeaderField: "unleash-connection-id")
+        request.setValue(appNameValue, forHTTPHeaderField: "unleash-appname")
+        request.setValue(connectionIdValue.uuidString, forHTTPHeaderField: "unleash-connection-id")
         request.setValue("unleash-client-swift:\(LibraryInfo.version)", forHTTPHeaderField: "unleash-sdk")
 
-        let customHeaders = self.customHeaders.merging(self.customHeadersProvider.getCustomHeaders()) { (_, new) in
+        let customHeaders = customHeadersValue.merging(self.customHeadersProvider.getCustomHeaders()) { (_, new) in
             new
         }.filter { key, _ in !isSensitiveHeader(key) }
 
@@ -149,7 +165,7 @@ public class Poller {
         }
         request.cachePolicy = .reloadIgnoringLocalCacheData
 
-        session.perform(request) { (data, response, error) in
+        session.perform(request) { [self] (data, response, error) in
             guard let httpResponse = response as? HTTPURLResponse else {
                 Printer.printMessage("No response")
                 completionHandler?(.noResponse)
@@ -183,9 +199,9 @@ public class Poller {
             var result: FeatureResponse?
 
             if let newEtag = httpResponse.allHeaderFields["Etag"] as? String, !newEtag.isEmpty {
-                self.syncQueue.sync {
-                    self.etag = newEtag
-                }
+                lock.lock()
+                self.etag = newEtag
+                lock.unlock()
             }
 
             do {
@@ -201,16 +217,16 @@ public class Poller {
 
             self.createFeatureMap(toggles: decodedResponse.toggles)
 
-            self.syncQueue.sync {
-                if self.ready {
-                    Printer.printMessage("Flags updated")
-                    SwiftEventBus.post("update")
-                } else {
-                    Printer.printMessage("Initial flags fetched")
-                    SwiftEventBus.post("ready")
-                    self.ready = true
-                }
+            lock.lock()
+            if self.ready {
+                Printer.printMessage("Flags updated")
+                SwiftEventBus.post("update")
+            } else {
+                Printer.printMessage("Initial flags fetched")
+                SwiftEventBus.post("ready")
+                self.ready = true
             }
+            lock.unlock()
 
             completionHandler?(nil)
         }

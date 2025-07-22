@@ -15,7 +15,7 @@ public class Metrics {
     let customHeaders: [String: String]
     let connectionId: UUID
 
-    private let queue: DispatchQueue
+    private let lock = NSLock()
 
     init(appName: String,
          metricsInterval: TimeInterval,
@@ -25,8 +25,7 @@ public class Metrics {
          url: URL,
          clientKey: String,
          customHeaders: [String: String] = [:],
-         connectionId: UUID,
-         queue: DispatchQueue = DispatchQueue(label: "io.getunleash.metrics")) {
+         connectionId: UUID) {
         self.appName = appName
         self.metricsInterval = metricsInterval
         self.clock = clock
@@ -37,68 +36,80 @@ public class Metrics {
         self.bucket = Bucket(clock: clock)
         self.customHeaders = customHeaders
         self.connectionId = connectionId
-        self.queue = queue
     }
 
     func start() {
-        if disableMetrics { return }
+        lock.lock()
+        let isDisabled = self.disableMetrics
+        lock.unlock()
 
-        queue.sync {
-            self.timer?.cancel()
-            self.timer = nil
-        }
+        if isDisabled { return }
+
+        lock.lock()
+        self.timer?.cancel()
+        self.timer = nil
+        let interval = self.metricsInterval
+        lock.unlock()
 
         let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .background))
-        timer.schedule(deadline: .now() + self.metricsInterval, repeating: self.metricsInterval)
+        timer.schedule(deadline: .now() + interval, repeating: interval)
         timer.setEventHandler { [weak self] in
             guard let self = self else { return }
             self.sendMetrics()
         }
         timer.resume()
 
-        queue.sync {
-            self.timer = timer
-        }
+        lock.lock()
+        self.timer = timer
+        lock.unlock()
     }
 
     func stop() {
-        queue.sync {
-            self.timer?.cancel()
-            self.timer = nil
-        }
+        lock.lock()
+        self.timer?.cancel()
+        self.timer = nil
+        lock.unlock()
     }
 
     func count(name: String, enabled: Bool) {
-        if disableMetrics { return }
-
-        queue.sync {
-            var toggle = bucket.toggles[name] ?? ToggleMetrics()
-            if enabled {
-                toggle.yes += 1
-            } else {
-                toggle.no += 1
-            }
-            bucket.toggles[name] = toggle
+        lock.lock()
+        let isDisabled = self.disableMetrics
+        if isDisabled {
+            lock.unlock()
+            return
         }
+
+        var toggle = bucket.toggles[name] ?? ToggleMetrics()
+        if enabled {
+            toggle.yes += 1
+        } else {
+            toggle.no += 1
+        }
+        bucket.toggles[name] = toggle
+        lock.unlock()
     }
 
     func countVariant(name: String, variant: String) {
-        if disableMetrics { return }
-
-        queue.sync {
-            var toggle = bucket.toggles[name] ?? ToggleMetrics()
-            toggle.variants[variant, default: 0] += 1
-            bucket.toggles[name] = toggle
+        lock.lock()
+        let isDisabled = self.disableMetrics
+        if isDisabled {
+            lock.unlock()
+            return
         }
+
+        var toggle = bucket.toggles[name] ?? ToggleMetrics()
+        toggle.variants[variant, default: 0] += 1
+        bucket.toggles[name] = toggle
+        lock.unlock()
     }
 
     func sendMetrics() {
-        let localBucket: Bucket = queue.sync {
-            bucket.closeBucket()
-            let result = bucket
-            bucket = Bucket(clock: clock)
-            return result
-        }
+        lock.lock()
+        bucket.closeBucket()
+        let localBucket = bucket
+        let clockFunction = self.clock
+        bucket = Bucket(clock: clockFunction)
+        lock.unlock()
 
         guard !localBucket.isEmpty() else { return }
 
@@ -122,18 +133,26 @@ public class Metrics {
     }
 
     func createRequest(payload: Data) -> URLRequest {
-        var request = URLRequest(url: url.appendingPathComponent("client/metrics"))
+        lock.lock()
+        let urlValue = self.url
+        let clientKeyValue = self.clientKey
+        let appNameValue = self.appName
+        let connectionIdValue = self.connectionId
+        let customHeadersValue = self.customHeaders
+        lock.unlock()
+
+        var request = URLRequest(url: urlValue.appendingPathComponent("client/metrics"))
         request.httpMethod = "POST"
         request.httpBody = payload
         request.addValue("application/json", forHTTPHeaderField: "Accept")
         request.addValue("no-cache", forHTTPHeaderField: "Cache")
         request.addValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.addValue(clientKey, forHTTPHeaderField: "Authorization")
-        request.addValue(appName, forHTTPHeaderField: "unleash-appname")
-        request.addValue(connectionId.uuidString, forHTTPHeaderField: "unleash-connection-id")
+        request.addValue(clientKeyValue, forHTTPHeaderField: "Authorization")
+        request.addValue(appNameValue, forHTTPHeaderField: "unleash-appname")
+        request.addValue(connectionIdValue.uuidString, forHTTPHeaderField: "unleash-connection-id")
         request.setValue("unleash-client-swift:\(LibraryInfo.version)", forHTTPHeaderField: "unleash-sdk")
-        if !self.customHeaders.isEmpty {
-            for (key, value) in self.customHeaders {
+        if !customHeadersValue.isEmpty {
+            for (key, value) in customHeadersValue {
                 request.setValue(value, forHTTPHeaderField: key)
             }
         }
