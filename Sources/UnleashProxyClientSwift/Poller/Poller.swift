@@ -209,16 +209,21 @@ public class Poller {
 
             self.createFeatureMap(toggles: decodedResponse.toggles)
 
+            let wasReady: Bool
             lock.lock()
-            if self.ready {
+            wasReady = self.ready
+            if !wasReady {
+                self.ready = true
+            }
+            lock.unlock()
+            
+            if wasReady {
                 Printer.printMessage("Flags updated")
                 SwiftEventBus.post("update")
             } else {
                 Printer.printMessage("Initial flags fetched")
                 SwiftEventBus.post("ready")
-                self.ready = true
             }
-            lock.unlock()
 
             completionHandler?(nil)
         }
