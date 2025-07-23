@@ -115,9 +115,7 @@ public class UnleashClientBase {
     public func isEnabled(name: String) -> Bool {
         let toggle = poller.getFeature(name: name)
         let enabled = toggle?.enabled ?? false
-        lock.lock()
-        let contextSnapshot = self._context
-        lock.unlock()
+        let contextSnapshot = self.context
 
         metrics.count(name: name, enabled: enabled)
 
@@ -138,9 +136,7 @@ public class UnleashClientBase {
         let toggle = poller.getFeature(name: name)
         let variant = toggle?.variant ?? .defaultDisabled
         let enabled = toggle?.enabled ?? false
-        lock.lock()
-        let contextSnapshot = self._context
-        lock.unlock()
+        let contextSnapshot = self.context
 
         metrics.count(name: name, enabled: enabled)
         metrics.countVariant(name: name, variant: variant.name)
@@ -230,9 +226,7 @@ public class UnleashClientBase {
             newProperties[key] = value
         }
 
-        lock.lock()
-        let currentContext = self._context
-        lock.unlock()
+        let currentContext = self.context
 
         let sessionId = context["sessionId"] ?? currentContext.sessionId;
 
