@@ -8,9 +8,29 @@
 import Foundation
 
 class Printer {
-    static var showPrintStatements = false
+    private static let lock = NSLock()
+    private static var _showPrintStatements = false
+
+    static var showPrintStatements: Bool {
+        get {
+            lock.lock()
+            let value = _showPrintStatements
+            lock.unlock()
+            return value
+        }
+        set {
+            lock.lock()
+            _showPrintStatements = newValue
+            lock.unlock()
+        }
+    }
+
     static func printMessage(_ items: Any..., separator: String = " ", terminator: String = "\n") {
-        if showPrintStatements {
+        lock.lock()
+        let shouldPrint = _showPrintStatements
+        lock.unlock()
+
+        if shouldPrint {
             print(items, separator: separator, terminator: terminator)
         }
     }

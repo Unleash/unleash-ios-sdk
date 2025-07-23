@@ -14,88 +14,56 @@ class UnleashThreadSafetyTest: XCTestCase {
             return
         }
 
-        // This test demonstrates the thread safety issues in UnleashClient
+        // This test demonstrates the thread safety of UnleashClient
         // by simulating concurrent access from multiple threads to the same client instance
 
-        // Run the test 10 times in a row to increase chances of detecting race conditions
-        for run in 1...10 {
-            // Create a shared client instance
-            let unleashClient = UnleashClientBase(
-                unleashUrl: "https://sandbox.getunleash.io/enterprise/api/frontend",
-                clientKey: "SDKIntegration:development.f0474f4a37e60794ee8fb00a4c112de58befde962af6d5055b383ea3",
-                appName: "testIntegration"
-            )
+        // Create an expectation to ensure the test doesn't hang
+        let expectation = XCTestExpectation(description: "Thread safety test completed")
 
-            // Start the client on the main thread
-            unleashClient.start()
+        // Create a shared client instance
+        let client = UnleashClientBase(
+            unleashUrl: "https://sandbox.getunleash.io/enterprise/api/frontend",
+            clientKey: "SDKIntegration:development.f0474f4a37e60794ee8fb00a4c112de58befde962af6d5055b383ea3",
+            appName: "testIntegration"
+        )
 
-            // Create a dispatch group to wait for all operations to complete
-            let group = DispatchGroup()
+        // Start the client on the main thread
+        client.start()
 
-            // Simulate multiple threads checking feature flags simultaneously
-            for _ in 1...5 {
-                // Background thread 1: Repeatedly check isEnabled
-                group.enter()
-                DispatchQueue.global().async {
-                    for _ in 1...100 {
-                        // This can crash due to race conditions in isEnabled
-                        _ = unleashClient.isEnabled(name: "enabled-feature")
+        // Run the test with high iteration count to increase chances of detecting race conditions
+        for _ in 0..<10000 {
+            // Update context with userId and isAuthenticated properties
+            client.updateContext(context: ["userId": "1"], properties: ["isAuthenticated": "true"]) { _ in }
 
-                        // Small sleep to increase chance of thread interleaving
-                        Thread.sleep(forTimeInterval: 0.01)
-                    }
-                    group.leave()
-                }
-
-                // Background thread 2: Repeatedly check variants
-                group.enter()
-                DispatchQueue.global().async {
-                    for _ in 1...100 {
-                        // This can crash due to race conditions in getVariant
-                        _ = unleashClient.getVariant(name: "enabled-feature")
-
-                        // Small sleep to increase chance of thread interleaving
-                        Thread.sleep(forTimeInterval: 0.01)
-                    }
-                    group.leave()
-                }
-
-                // Background thread 3: Update context occasionally
-                group.enter()
-                DispatchQueue.global().async {
-                    for j in 1...10 {
-                        // This can crash due to race conditions when updating context
-                        unleashClient.updateContext(context: [
-                            "userId": "user-\(j)",
-                            "sessionId": "session-\(j)"
-                        ])
-
-                        // Sleep longer between context updates
-                        Thread.sleep(forTimeInterval: 0.1)
-                    }
-                    group.leave()
-                }
+            // Background thread 1: Check if boolean parameter is enabled
+            DispatchQueue.global(qos: .userInitiated).async {
+                _ = client.isEnabled(name: "bool_parameter")
             }
 
-            // Add a specific test for dataRaceTest flag, similar to the integration test
-            var enabledCount = 0
-            for _ in 1...15000 {
-                let result = unleashClient.isEnabled(name: "dataRaceTest")
-                if result {
-                    enabledCount += 1
-                }
+            // Background thread 2: Start client with bootstrap toggles
+            DispatchQueue.global(qos: .utility).async {
+                client.start(bootstrap: .toggles([]), false) { _ in }
             }
 
-            // Wait for all operations to complete
-            group.wait()
-
-            // Clean up
-            unleashClient.stop()
-
-            // Add a small delay between runs to ensure resources are properly released
-            if run < 10 {
-                Thread.sleep(forTimeInterval: 1.0)
+            // Background thread 3: Get variant for string parameter
+            DispatchQueue.global(qos: .default).async {
+                _ = client.getVariant(name: "string_parameter")
             }
         }
+
+        // Use a background queue to avoid blocking the main thread
+        DispatchQueue.global().async {
+            // Give background operations a chance to complete
+            Thread.sleep(forTimeInterval: 2.0)
+
+            // Clean up
+            client.stop()
+
+            // Mark the expectation as fulfilled
+            expectation.fulfill()
+        }
+
+        // Wait for the expectation to be fulfilled with a timeout
+        wait(for: [expectation], timeout: 10.0) // 10 second timeout
     }
 }

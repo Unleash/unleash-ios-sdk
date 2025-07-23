@@ -1,11 +1,10 @@
-
 import Foundation
 import SwiftEventBus
 
 public class Poller {
     var refreshInterval: Int?
     var unleashUrl: URL
-    var timer: Timer?
+    var timer: DispatchSourceTimer?
     var ready: Bool
     var apiKey: String;
     var etag: String;
@@ -16,6 +15,8 @@ public class Poller {
     var storageProvider: StorageProvider
     let customHeaders: [String: String]
     let customHeadersProvider: CustomHeadersProvider
+
+    private let lock = NSLock()
 
     public init(
         refreshInterval: Int? = nil,
@@ -52,8 +53,7 @@ public class Poller {
         bootstrapping toggles: [Toggle] = [],
         context: Context,
         completionHandler: ((PollerError?) -> Void)? = nil
-    ) -> Void {
-  
+    ) {
         if toggles.isEmpty {
             self.getFeatures(context: context, completionHandler: completionHandler)
         } else {
@@ -62,36 +62,52 @@ public class Poller {
             completionHandler?(nil)
         }
 
-        if self.refreshInterval == 0 {
+        let refreshIntervalValue = self.refreshInterval
+
+        if refreshIntervalValue == 0 {
             return
         }
 
-        let timer = Timer.scheduledTimer(withTimeInterval: Double(self.refreshInterval ?? 15), repeats: true) { timer in
+        let interval = Double(refreshIntervalValue ?? 15)
+
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .background))
+        timer.schedule(deadline: .now() + interval, repeating: interval)
+        timer.setEventHandler { [weak self] in
+            guard let self = self else { return }
             self.getFeatures(context: context)
         }
+        timer.resume()
+
+        lock.lock()
         self.timer = timer
-        RunLoop.current.add(timer, forMode: .default)
+        lock.unlock()
     }
-    
-    public func stop() -> Void {
-        self.timer?.invalidate()
+
+    public func stop() {
+        lock.lock()
+        self.timer?.cancel()
+        self.timer = nil
+        lock.unlock()
     }
 
     func formatURL(context: Context) -> URL? {
-        var components = URLComponents(url: unleashUrl, resolvingAgainstBaseURL: false)
+        let url = self.unleashUrl
+
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.percentEncodedQuery = context
             .toURIMap()
             .compactMap { key, value in
-            if let encodedKey = key.addingPercentEncoding(withAllowedCharacters: .rfc3986Unreserved),
-               let encodedValue = value.addingPercentEncoding(withAllowedCharacters: .rfc3986Unreserved) {
-                return [encodedKey, encodedValue].joined(separator: "=")
+                if let encodedKey = key.addingPercentEncoding(withAllowedCharacters: .rfc3986Unreserved),
+                   let encodedValue = value.addingPercentEncoding(withAllowedCharacters: .rfc3986Unreserved) {
+                    return [encodedKey, encodedValue].joined(separator: "=")
+                }
+                return nil
             }
-            return nil
-        }.joined(separator: "&")
+            .joined(separator: "&")
 
         return components?.url
     }
-    
+
     private func createFeatureMap(toggles: [Toggle]) {
         storageProvider.clear()
         let values = Dictionary(
@@ -99,28 +115,35 @@ public class Poller {
         )
         storageProvider.set(values: values)
     }
-    
+
     public func getFeature(name: String) -> Toggle? {
-        return self.storageProvider.value(key: name);
+        return self.storageProvider.value(key: name)
     }
 
     func getFeatures(
         context: Context,
         completionHandler: ((PollerError?) -> Void)? = nil
-    ) -> Void {
+    ) {
         guard let url = formatURL(context: context) else {
             completionHandler?(.url)
             Printer.printMessage("Invalid URL")
             return
         }
-        
+
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(self.apiKey, forHTTPHeaderField: "Authorization")
-        request.setValue(self.etag, forHTTPHeaderField: "If-None-Match")
-        request.setValue(self.appName, forHTTPHeaderField: "unleash-appname")
-        request.setValue(self.connectionId.uuidString, forHTTPHeaderField: "unleash-connection-id")
+
+        let currentEtag: String
+        
+        lock.lock()
+        currentEtag = self.etag
+        lock.unlock()
+
+        request.setValue(apiKey, forHTTPHeaderField: "Authorization")
+        request.setValue(currentEtag, forHTTPHeaderField: "If-None-Match")
+        request.setValue(appName, forHTTPHeaderField: "unleash-appname")
+        request.setValue(connectionId.uuidString, forHTTPHeaderField: "unleash-connection-id")
         request.setValue("unleash-client-swift:\(LibraryInfo.version)", forHTTPHeaderField: "unleash-sdk")
 
         let customHeaders = self.customHeaders.merging(self.customHeadersProvider.getCustomHeaders()) { (_, new) in
@@ -133,8 +156,8 @@ public class Poller {
             }
         }
         request.cachePolicy = .reloadIgnoringLocalCacheData
-        
-        session.perform(request) { (data, response, error) in
+
+        session.perform(request) { [self] (data, response, error) in
             guard let httpResponse = response as? HTTPURLResponse else {
                 Printer.printMessage("No response")
                 completionHandler?(.noResponse)
@@ -146,13 +169,13 @@ public class Poller {
                 Printer.printMessage("No changes in feature toggles.")
                 return
             }
-            
+
             if httpResponse.statusCode > 399 && httpResponse.statusCode < 599 {
                 completionHandler?(.network)
                 Printer.printMessage("Error fetching toggles")
                 return
             }
-            
+
             guard let data = data else {
                 completionHandler?(nil)
                 Printer.printMessage("No response data")
@@ -166,32 +189,42 @@ public class Poller {
             }
 
             var result: FeatureResponse?
-            
-            if let etag = httpResponse.allHeaderFields["Etag"] as? String, !etag.isEmpty {
-                self.etag = etag
+
+            if let newEtag = httpResponse.allHeaderFields["Etag"] as? String, !newEtag.isEmpty {
+                lock.lock()
+                self.etag = newEtag
+                lock.unlock()
             }
-            
+
             do {
                 result = try JSONDecoder().decode(FeatureResponse.self, from: data)
             } catch {
                 Printer.printMessage(error.localizedDescription)
             }
-            
+
             guard let decodedResponse = result else {
                 completionHandler?(.decoding)
                 return
             }
-            
+
             self.createFeatureMap(toggles: decodedResponse.toggles)
-            if (self.ready) {
+
+            let wasReady: Bool
+            lock.lock()
+            wasReady = self.ready
+            if !wasReady {
+                self.ready = true
+            }
+            lock.unlock()
+            
+            if wasReady {
                 Printer.printMessage("Flags updated")
                 SwiftEventBus.post("update")
             } else {
                 Printer.printMessage("Initial flags fetched")
                 SwiftEventBus.post("ready")
-                self.ready = true
             }
-            
+
             completionHandler?(nil)
         }
     }
@@ -199,8 +232,8 @@ public class Poller {
     private func isSensitiveHeader(_ header: String) -> Bool {
         let lowercasedHeader = header.lowercased()
         return lowercasedHeader == "content-type" ||
-                lowercasedHeader == "if-none-match" ||
-                lowercasedHeader.hasPrefix("unleash-")
+               lowercasedHeader == "if-none-match" ||
+               lowercasedHeader.hasPrefix("unleash-")
     }
 }
 

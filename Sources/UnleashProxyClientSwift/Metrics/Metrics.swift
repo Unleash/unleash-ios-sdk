@@ -9,11 +9,13 @@ public class Metrics {
     let poster: PosterHandler
     let clock: () -> Date
     var disableMetrics: Bool
-    var timer: Timer?
+    var timer: DispatchSourceTimer?
     var bucket: Bucket
     let url: URL
     let customHeaders: [String: String]
     let connectionId: UUID
+
+    private let lock = NSLock()
 
     init(appName: String,
          metricsInterval: TimeInterval,
@@ -37,49 +39,82 @@ public class Metrics {
     }
 
     func start() {
-        if disableMetrics { return }
+        lock.lock()
+        let isDisabled = self.disableMetrics
+        lock.unlock()
 
-        self.timer = Timer.scheduledTimer(withTimeInterval: metricsInterval, repeats: true) { _ in
+        if isDisabled { return }
+
+        lock.lock()
+        self.timer?.cancel()
+        self.timer = nil
+        let interval = self.metricsInterval
+        lock.unlock()
+
+        let timer = DispatchSource.makeTimerSource(queue: DispatchQueue.global(qos: .background))
+        timer.schedule(deadline: .now() + interval, repeating: interval)
+        timer.setEventHandler { [weak self] in
+            guard let self = self else { return }
             self.sendMetrics()
         }
+        timer.resume()
+
+        lock.lock()
+        self.timer = timer
+        lock.unlock()
     }
 
     func stop() {
-        self.timer?.invalidate()
+        lock.lock()
+        self.timer?.cancel()
+        self.timer = nil
+        lock.unlock()
     }
-    
-    private let queue = DispatchQueue(label: "io.getunleash.metrics")
 
     func count(name: String, enabled: Bool) {
-        if disableMetrics { return }
-
-        queue.sync {
-            var toggle = bucket.toggles[name] ?? ToggleMetrics()
-            if enabled {
-                toggle.yes += 1
-            } else {
-                toggle.no += 1
-            }
-            bucket.toggles[name] = toggle
+        lock.lock()
+        let isDisabled = self.disableMetrics
+        if isDisabled {
+            lock.unlock()
+            return
         }
+
+        var toggle = bucket.toggles[name] ?? ToggleMetrics()
+        if enabled {
+            toggle.yes += 1
+        } else {
+            toggle.no += 1
+        }
+        bucket.toggles[name] = toggle
+        lock.unlock()
     }
 
     func countVariant(name: String, variant: String) {
-        if disableMetrics { return }
-
-        queue.sync {
-            var toggle = bucket.toggles[name] ?? ToggleMetrics()
-            toggle.variants[variant, default: 0] += 1
-            bucket.toggles[name] = toggle
+        lock.lock()
+        let isDisabled = self.disableMetrics
+        if isDisabled {
+            lock.unlock()
+            return
         }
+
+        var toggle = bucket.toggles[name] ?? ToggleMetrics()
+        toggle.variants[variant, default: 0] += 1
+        bucket.toggles[name] = toggle
+        lock.unlock()
     }
 
     func sendMetrics() {
+        let localBucket: Bucket
+        let clockFunction: () -> Date
+        
+        lock.lock()
         bucket.closeBucket()
-        guard !bucket.isEmpty() else { return }
+        localBucket = bucket
+        clockFunction = self.clock
+        bucket = Bucket(clock: clockFunction)
+        lock.unlock()
 
-        let localBucket = bucket
-        bucket = Bucket(clock: clock)
+        guard !localBucket.isEmpty() else { return }
 
         do {
             let payload = MetricsPayload(appName: appName, instanceId: "swift", bucket: localBucket)
@@ -111,8 +146,8 @@ public class Metrics {
         request.addValue(appName, forHTTPHeaderField: "unleash-appname")
         request.addValue(connectionId.uuidString, forHTTPHeaderField: "unleash-connection-id")
         request.setValue("unleash-client-swift:\(LibraryInfo.version)", forHTTPHeaderField: "unleash-sdk")
-        if !self.customHeaders.isEmpty {
-            for (key, value) in self.customHeaders {
+        if !customHeaders.isEmpty {
+            for (key, value) in customHeaders {
                 request.setValue(value, forHTTPHeaderField: key)
             }
         }
