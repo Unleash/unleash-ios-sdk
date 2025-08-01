@@ -416,7 +416,7 @@ This gives you warnings in the console when you have any data races.
 
 ## Installation
 
-Follow the following steps in order to install the unleash-proxy-client-swift:
+Follow the following steps in order to install the unleash-ios-sdk:
 
 1. In your Xcode project go to File -> Swift Packages -> Add Package Dependency
 2. Supply the link to this repository
@@ -427,7 +427,7 @@ Once you're done, you should see SwiftEventBus and UnleashProxyClientSwift liste
 
 
 ## Upgrade guide from 1.x -> 2.x
-In 2.0.0 the StorageProvider public interface [was changed](https://github.com/Unleash/unleash-proxy-client-swift/pull/113) to be more in line with other SDKs. Specifically the set method was changed to accept all flags at once. It now has the following interface: 
+In 2.0.0 the StorageProvider public interface [was changed](https://github.com/Unleash/unleash-ios-sdk/pull/113) to be more in line with other SDKs. Specifically the set method was changed to accept all flags at once. It now has the following interface: 
 ```
 func set(values: [String: Toggle])
 ```
