@@ -145,7 +145,7 @@ public class Metrics {
         request.addValue(clientKey, forHTTPHeaderField: "Authorization")
         request.addValue(appName, forHTTPHeaderField: "unleash-appname")
         request.addValue(connectionId.uuidString, forHTTPHeaderField: "unleash-connection-id")
-        request.setValue("unleash-client-swift:\(LibraryInfo.version)", forHTTPHeaderField: "unleash-sdk")
+        request.setValue("unleash-ios-sdk:\(LibraryInfo.version)", forHTTPHeaderField: "unleash-sdk")
         if !customHeaders.isEmpty {
             for (key, value) in customHeaders {
                 request.setValue(value, forHTTPHeaderField: key)

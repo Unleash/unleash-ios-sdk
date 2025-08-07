@@ -144,7 +144,7 @@ public class Poller {
         request.setValue(currentEtag, forHTTPHeaderField: "If-None-Match")
         request.setValue(appName, forHTTPHeaderField: "unleash-appname")
         request.setValue(connectionId.uuidString, forHTTPHeaderField: "unleash-connection-id")
-        request.setValue("unleash-client-swift:\(LibraryInfo.version)", forHTTPHeaderField: "unleash-sdk")
+        request.setValue("unleash-ios-sdk:\(LibraryInfo.version)", forHTTPHeaderField: "unleash-sdk")
 
         let customHeaders = self.customHeaders.merging(self.customHeadersProvider.getCustomHeaders()) { (_, new) in
             new
